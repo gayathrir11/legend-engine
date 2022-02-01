@@ -16,6 +16,7 @@ package org.finos.legend.engine.language.pure.compiler.toPureGraph;
 
 import org.eclipse.collections.api.RichIterable;
 import org.eclipse.collections.api.block.function.Function;
+import org.eclipse.collections.api.list.ListIterable;
 import org.eclipse.collections.api.list.MutableList;
 import org.eclipse.collections.impl.factory.Lists;
 import org.eclipse.collections.impl.list.mutable.FastList;
@@ -86,6 +87,10 @@ import org.finos.legend.pure.generated.Root_meta_pure_tds_SortInformation_Impl;
 import org.finos.legend.pure.generated.Root_meta_pure_tds_TdsOlapAggregation_Impl;
 import org.finos.legend.pure.generated.Root_meta_pure_tds_TdsOlapRank_Impl;
 import org.finos.legend.pure.generated.platform_pure_graph;
+import org.finos.legend.pure.m3.compiler.postprocessing.processor.milestoning.MilestoningDates;
+import org.finos.legend.pure.m3.compiler.postprocessing.processor.milestoning.MilestoningFunctions;
+import org.finos.legend.pure.m3.compiler.postprocessing.processor.milestoning.MilestoningStereotype;
+import org.finos.legend.pure.m3.compiler.postprocessing.processor.milestoning.MilestoningStereotypeEnum;
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.function.LambdaFunction;
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.function.property.AbstractProperty;
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.multiplicity.Multiplicity;
@@ -97,6 +102,9 @@ import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.valuespecificat
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.valuespecification.ValueSpecificationAccessor;
 import org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.valuespecification.VariableExpression;
 import org.finos.legend.pure.m3.navigation.M3Paths;
+import org.finos.legend.pure.m3.navigation.importstub.ImportStub;
+import org.finos.legend.pure.m3.tools.ListHelper;
+import org.finos.legend.pure.m4.coreinstance.CoreInstance;
 import org.finos.legend.pure.m4.coreinstance.SourceInformation;
 import org.finos.legend.pure.m4.coreinstance.primitive.date.DateFormat;
 import org.finos.legend.pure.m4.coreinstance.primitive.date.LatestDate;
@@ -501,6 +509,26 @@ public class ValueSpecificationBuilder implements ValueSpecificationVisitor<org.
         Assert.assertTrue(func.getOne() != null, () -> "Can't find a match for function '" + appliedFunction.function + "(" + (func.getTwo() == null ? "?" : LazyIterate.collect(func.getTwo(), v -> (v._genericType() == null ? "?" : v._genericType()._rawType()._name()) + org.finos.legend.pure.m3.navigation.multiplicity.Multiplicity.print(v._multiplicity())).makeString(",")) + ")'", appliedFunction.sourceInformation, EngineErrorType.COMPILATION);
         ValueSpecification result = func.getOne();
         result.setSourceInformation(SourceInformationHelper.toM3SourceInformation(appliedFunction.sourceInformation));
+        if(result instanceof SimpleFunctionExpression && "getAll".equals(((SimpleFunctionExpression) result)._functionName()) && ("getAll_Class_1__Date_1__T_MANY_".equals(((SimpleFunctionExpression) result)._func().getName()) || "getAll_Class_1__Date_1__Date_1__T_MANY_".equals(((SimpleFunctionExpression) result)._func().getName()))) {
+            ValueSpecification parameterValue = ((SimpleFunctionExpression)result)._parametersValues().getFirst();
+           // CoreInstance propertyReturnType = parameterValue instanceof InstanceValue ? parameterValue._genericType()._rawType()._stereotypes() : null;
+            MilestoningStereotype milestoningStereotype = Milestoning.temporalStereotypes(parameterValue._genericType()._typeArguments().toList().getFirst()._rawType()._stereotypes()).get(0);
+            //System.out.println(((SimpleFunctionExpression) result)._parametersValues().toList().reverseThis());
+            ListIterable<? extends ValueSpecification> temporalParameterValues = ((SimpleFunctionExpression) result)._parametersValues().toList().reverseThis();
+            if (milestoningStereotype == MilestoningStereotypeEnum.businesstemporal)
+            {
+                Milestoning.businessDate = temporalParameterValues.get(0);
+            }
+            else if (milestoningStereotype == MilestoningStereotypeEnum.processingtemporal)
+            {
+                Milestoning.processingDate = temporalParameterValues.get(0);
+            }
+            else if (milestoningStereotype == MilestoningStereotypeEnum.bitemporal)
+            {
+                Milestoning.processingDate = temporalParameterValues.get(0);
+                Milestoning.businessDate = temporalParameterValues.get(1);
+            }
+        }
         return result;
     }
 
