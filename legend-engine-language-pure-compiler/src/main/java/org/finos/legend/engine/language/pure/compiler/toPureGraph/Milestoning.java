@@ -30,6 +30,7 @@ import org.eclipse.collections.impl.tuple.Tuples;
 import org.eclipse.collections.impl.utility.ArrayIterate;
 import org.eclipse.collections.impl.utility.LazyIterate;
 import org.eclipse.collections.impl.utility.ListIterate;
+import org.finos.legend.engine.protocol.pure.v1.model.context.EngineErrorType;
 import org.finos.legend.engine.shared.core.operational.errorManagement.EngineException;
 import org.finos.legend.pure.generated.*;
 import org.finos.legend.pure.m3.compiler.PropertyOwnerStrategy;
@@ -51,6 +52,7 @@ import org.finos.legend.pure.m3.navigation.ProcessorSupport;
 import org.finos.legend.pure.m3.navigation.profile.Profile;
 import org.finos.legend.pure.m3.tools.ListHelper;
 import org.finos.legend.pure.m4.coreinstance.CoreInstance;
+import org.finos.legend.engine.protocol.pure.v1.model.SourceInformation;
 
 import java.util.List;
 import java.util.Objects;
@@ -691,11 +693,12 @@ public class Milestoning
         return parameterValues.size() == 1;
     }
 
-    public static void applyPropertyFunctionExpressionMilestonedDates(FunctionExpression fe, CoreInstance func)
+    public static void applyPropertyFunctionExpressionMilestonedDates(FunctionExpression fe, CoreInstance func, SourceInformation sourceInformation)
     {
         Pair<MilestoningStereotype, MilestoningStereotype> sourceTargetMilestoningStereotypeEnums = getSourceTargetMilestoningStereotypeEnums(func);
         MilestoningStereotype sourceTypeMilestoning = sourceTargetMilestoningStereotypeEnums.getOne();
         MilestoningStereotype targetTypeMilestoning = sourceTargetMilestoningStereotypeEnums.getTwo();
+        String propertyName = func.getName();
 
         MutableList<? extends ValueSpecification> parametersValues = fe._parametersValues().toList();
         ValueSpecification[] milestoningDateParameters = new ValueSpecification[targetTypeMilestoning.getTemporalDatePropertyNames().size()];
@@ -729,6 +732,10 @@ public class Milestoning
             {
                 setBiTemporaDates(milestoningDateParameters);
             }
+            if(milestoningDateParameters[0] == null || milestoningDateParameters[1] == null)
+            {
+                throw new EngineException("No-Arg milestoned property: '" + propertyName + "' must be either called in a milestoning context or supplied with " + "[processingDate, businessDate]" + " parameters", sourceInformation, EngineErrorType.COMPILATION);
+            }
         }
         else if (isSingleDateTemporal(targetTypeMilestoning) && noDateParamSupplied(parametersValues))
         {
@@ -748,6 +755,17 @@ public class Milestoning
             if (sourceTypeMilestoning == targetTypeMilestoning)
             {
                 setMilestoningDateParameters(milestoningDateParameters, 0, propagatedDate);
+            }
+            if (milestoningDateParameters[0] == null)
+            {
+                if (targetTypeMilestoning.getPurePlatformStereotypeName() == "processingTemporal")
+                {
+                    throw new EngineException("No-Arg milestoned property: '" + propertyName + "' must be either called in a milestoning context or supplied with " + "[processingDate]" + " parameters", sourceInformation, EngineErrorType.COMPILATION);
+                }
+                else
+                {
+                    throw new EngineException("No-Arg milestoned property: '" + propertyName + "' must be either called in a milestoning context or supplied with " + "[businessDate]" + " parameters", sourceInformation, EngineErrorType.COMPILATION);
+                }
             }
         }
         if (!ArrayIterate.isEmpty(milestoningDateParameters))
@@ -786,9 +804,9 @@ public class Milestoning
         return null;
     }
 
-    private static void updateFunctionExpressionWithMilestoningDateParams(FunctionExpression functionExpression, CoreInstance propertyFunc)
+    private static void updateFunctionExpressionWithMilestoningDateParams(FunctionExpression functionExpression, CoreInstance propertyFunc, SourceInformation sourceInformation)
     {
-        applyPropertyFunctionExpressionMilestonedDates(functionExpression, propertyFunc);
+        applyPropertyFunctionExpressionMilestonedDates(functionExpression, propertyFunc, sourceInformation);
         InstanceValue propertyName = functionExpression._propertyName();
         functionExpression._propertyNameRemove();
         functionExpression._qualifiedPropertyName(propertyName);
@@ -846,14 +864,14 @@ public class Milestoning
         return null;
     }
 
-    public static CoreInstance getMilestoningQualifiedPropertyWithAllDatesSupplied(FunctionExpression functionExpression, CoreInstance propertyFunc, CompileContext context, Integer parametersCount)
+    public static CoreInstance getMilestoningQualifiedPropertyWithAllDatesSupplied(FunctionExpression functionExpression, CoreInstance propertyFunc, CompileContext context, Integer parametersCount, SourceInformation sourceInformation)
     {
         ListIterable<? extends ValueSpecification> parametersValues = functionExpression._parametersValues().toList();
         ValueSpecification source = parametersValues.get(0);
        // MilestoningDates propagatedDates = getMilestoningDatesForValidMilestoningDataSourceTypes(source, context, parametersCount);
         if (processingDate != null || businessDate != null)
         {
-            updateFunctionExpressionWithMilestoningDateParams(functionExpression, propertyFunc);
+            updateFunctionExpressionWithMilestoningDateParams(functionExpression, propertyFunc, sourceInformation);
             //propertyFunc = getMatchingMilestoningQualifiedPropertyWithDateArg(propertyFunc, context);
         }
         return functionExpression._func();
