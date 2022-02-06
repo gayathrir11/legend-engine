@@ -31,6 +31,8 @@ import org.eclipse.collections.impl.utility.ArrayIterate;
 import org.eclipse.collections.impl.utility.LazyIterate;
 import org.eclipse.collections.impl.utility.ListIterate;
 import org.finos.legend.engine.protocol.pure.v1.model.context.EngineErrorType;
+import org.finos.legend.engine.protocol.pure.v1.model.packageableElement.domain.Association;
+import org.finos.legend.engine.protocol.pure.v1.model.packageableElement.domain.StereotypePtr;
 import org.finos.legend.engine.shared.core.operational.errorManagement.EngineException;
 import org.finos.legend.pure.generated.*;
 import org.finos.legend.pure.m3.compiler.PropertyOwnerStrategy;
@@ -652,16 +654,26 @@ public class Milestoning
             owningType = ((AbstractProperty)property)._owner();
         }*/
        // System.out.println(owningType);
-        return ((AbstractProperty<?>) property)._owner();
+        CoreInstance owner = ((AbstractProperty<?>) property)._owner();
+        if (owner instanceof Class)
+        {
+            return owner;
+        }
+        else if (owner instanceof org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.relationship.Association)
+        {
+            return ((org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.relationship.Association) owner)._originalMilestonedProperties().getFirst()._genericType()._rawType();
+
+        }
+        return null;
     }
 
     private static Pair<MilestoningStereotype, MilestoningStereotype> getSourceTargetMilestoningStereotypeEnums(CoreInstance func)
     {
         CoreInstance sourceType = getMilestonedPropertyOwningType(func);
-        Class source = (Class) sourceType;
-        MilestoningStereotype sourceTypeMilestoningStereotype = Milestoning.temporalStereotypes(source._stereotypes()).get(0);
         CoreInstance targetType = func instanceof AbstractProperty ? ((AbstractProperty)func)._genericType()._rawType() : null;
+        Class source = (Class) sourceType;
         Class target = (Class) targetType;
+        MilestoningStereotype sourceTypeMilestoningStereotype = Milestoning.temporalStereotypes(source._stereotypes()).get(0);
         MilestoningStereotype targetTypeMilestoningStereotype = Milestoning.temporalStereotypes(target._stereotypes()).get(0);
         System.out.println(sourceTypeMilestoningStereotype + " " + targetTypeMilestoningStereotype);
         return Tuples.pair(sourceTypeMilestoningStereotype, targetTypeMilestoningStereotype);
@@ -716,7 +728,7 @@ public class Milestoning
             {
                 int propagatedDateIndex = Objects.requireNonNull(sourceTypeMilestoning).positionInTemporalParameterValues();
                 CoreInstance propagatedDate;
-                if (sourceTypeMilestoning.getPurePlatformStereotypeName() == "processingtemporal")
+                if (isProcessingTemporal(sourceTypeMilestoning))
                 {
                     propagatedDate = processingDate;
                 }
@@ -740,7 +752,7 @@ public class Milestoning
         else if (isSingleDateTemporal(targetTypeMilestoning) && noDateParamSupplied(parametersValues))
         {
             CoreInstance propagatedDate;
-            if (targetTypeMilestoning.getPurePlatformStereotypeName() == "processingtemporal")
+            if (isProcessingTemporal(targetTypeMilestoning))
             {
                 propagatedDate = processingDate;
             }
@@ -758,7 +770,7 @@ public class Milestoning
             }
             if (milestoningDateParameters[0] == null)
             {
-                if (targetTypeMilestoning.getPurePlatformStereotypeName() == "processingTemporal")
+                if (isProcessingTemporal(targetTypeMilestoning))
                 {
                     throw new EngineException("No-Arg milestoned property: '" + propertyName + "' must be either called in a milestoning context or supplied with " + "[processingDate]" + " parameters", sourceInformation, EngineErrorType.COMPILATION);
                 }
@@ -875,5 +887,25 @@ public class Milestoning
             //propertyFunc = getMatchingMilestoningQualifiedPropertyWithDateArg(propertyFunc, context);
         }
         return functionExpression._func();
+    }
+
+    public static void updateMilestonedParameters(FunctionExpression functionExpression, CoreInstance propertyFunc, CompileContext context)
+    {
+        ListIterable<? extends ValueSpecification> parametersValues = functionExpression._parametersValues().toList();
+        Class target = propertyFunc instanceof AbstractProperty ? (Class) ((AbstractProperty)propertyFunc)._genericType()._rawType() : null;
+        MilestoningStereotype milestoningStereotype = Milestoning.temporalStereotypes(target._stereotypes()).get(0);
+        if (isBiTemporal(milestoningStereotype))
+        {
+            processingDate = parametersValues.get(1);
+            businessDate = parametersValues.get(2);
+        }
+        else if (isProcessingTemporal(milestoningStereotype))
+        {
+            processingDate = parametersValues.get(1);
+        }
+        else
+        {
+            businessDate = parametersValues.get(1);
+        }
     }
 }

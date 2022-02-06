@@ -514,19 +514,19 @@ public class ValueSpecificationBuilder implements ValueSpecificationVisitor<org.
            // CoreInstance propertyReturnType = parameterValue instanceof InstanceValue ? parameterValue._genericType()._rawType()._stereotypes() : null;
             MilestoningStereotype milestoningStereotype = Milestoning.temporalStereotypes(parameterValue._genericType()._typeArguments().toList().getFirst()._rawType()._stereotypes()).get(0);
             //System.out.println(((SimpleFunctionExpression) result)._parametersValues().toList().reverseThis());
-            ListIterable<? extends ValueSpecification> temporalParameterValues = ((SimpleFunctionExpression) result)._parametersValues().toList().reverseThis();
+            ListIterable<? extends ValueSpecification> temporalParameterValues = ((SimpleFunctionExpression) result)._parametersValues().toList();
             if (milestoningStereotype == MilestoningStereotypeEnum.businesstemporal)
             {
-                Milestoning.businessDate = temporalParameterValues.get(0);
+                Milestoning.businessDate = temporalParameterValues.get(1);
             }
             else if (milestoningStereotype == MilestoningStereotypeEnum.processingtemporal)
             {
-                Milestoning.processingDate = temporalParameterValues.get(0);
+                Milestoning.processingDate = temporalParameterValues.get(1);
             }
             else if (milestoningStereotype == MilestoningStereotypeEnum.bitemporal)
             {
-                Milestoning.processingDate = temporalParameterValues.get(0);
-                Milestoning.businessDate = temporalParameterValues.get(1);
+                Milestoning.processingDate = temporalParameterValues.get(1);
+                Milestoning.businessDate = temporalParameterValues.get(2);
             }
         }
         return result;

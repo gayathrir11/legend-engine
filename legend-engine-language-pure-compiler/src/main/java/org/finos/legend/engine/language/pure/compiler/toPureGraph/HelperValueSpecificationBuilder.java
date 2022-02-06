@@ -223,6 +223,10 @@ public class HelperValueSpecificationBuilder
             {
                 Milestoning.getMilestoningQualifiedPropertyWithAllDatesSupplied((FunctionExpression)result, foundProperty, context, parameters.size(), sourceInformation);
             }
+            if (Milestoning.isGeneratedQualifiedProperty(foundProperty, context))
+            {
+                Milestoning.updateMilestonedParameters((FunctionExpression)result, foundProperty, context);
+            }
         }
         processingContext.pop();
         return result;
