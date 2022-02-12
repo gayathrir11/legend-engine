@@ -596,20 +596,6 @@ public class Milestoning
         return temporalStereoTypeNames.select(Predicates.attributePredicate(Functions.<String>firstOfPair(), Predicates.in(clsStereotypeNames))).collect(Functions.<MilestoningStereotypeEnum>secondOfPair());
     }
 
-    /*public static ListIterable<MilestoningStereotypeEnum> getTemporalStereoTypesFromTopMostNonTopTypeGeneralizations(CoreInstance cls)
-    {
-        MutableSet<CoreInstance> leafUserDefTypes = Type.getTopMostNonTopTypeGeneralizations(cls);
-
-        return leafUserDefTypes.flatCollect(new Function<CoreInstance, ListIterable<MilestoningStereotypeEnum>>()
-        {
-            @Override
-            public ListIterable<MilestoningStereotypeEnum> valueOf(CoreInstance coreInstance)
-            {
-                return getTemporalStereoTypesExcludingParents(coreInstance);
-            }
-        }).toList().distinct();
-    }*/
-
     private static int getCountOfParametersSatisfyingMilestoningDateRequirments(QualifiedProperty milestonedQualifiedProperty, CompileContext context)
     {
         if (!isGeneratedMilestoningProperty(milestonedQualifiedProperty, context))
@@ -642,18 +628,6 @@ public class Milestoning
 
     private static CoreInstance getMilestonedPropertyOwningType(CoreInstance property)
     {
-       /* CoreInstance owningType;
-        if (property instanceof QualifiedProperty)
-        {
-            //FunctionType functionType = (FunctionType)property;
-           // VariableExpression thisVar = functionType._parameters().getFirst();
-           // owningType = thisVar._genericType()._rawType();
-        }
-        else
-        {
-            owningType = ((AbstractProperty)property)._owner();
-        }*/
-       // System.out.println(owningType);
         CoreInstance owner = ((AbstractProperty<?>) property)._owner();
         if (owner instanceof Class)
         {
@@ -711,17 +685,15 @@ public class Milestoning
         MilestoningStereotype sourceTypeMilestoning = sourceTargetMilestoningStereotypeEnums.getOne();
         MilestoningStereotype targetTypeMilestoning = sourceTargetMilestoningStereotypeEnums.getTwo();
         String propertyName = func.getName();
-
         MutableList<? extends ValueSpecification> parametersValues = fe._parametersValues().toList();
         ValueSpecification[] milestoningDateParameters = new ValueSpecification[targetTypeMilestoning.getTemporalDatePropertyNames().size()];
-
-       // fe._originalMilestonedPropertyCoreInstance(func); //Figure out how to add this
         fe._originalMilestonedPropertyParametersValues(fe._parametersValues());
 
         if (isBiTemporal(targetTypeMilestoning))
         {
             if (isBiTemporal(sourceTypeMilestoning) && oneDateParamSupplied(parametersValues))
             {
+                businessDate = parametersValues.get(1);
                 setBiTemporaDates(milestoningDateParameters);
             }
             else if (isSingleDateTemporal(sourceTypeMilestoning) && oneDateParamSupplied(parametersValues))
@@ -787,35 +759,6 @@ public class Milestoning
         }
     }
 
-    public static boolean isGeneratedQualifiedPropertyWithWithAllMilestoningDatesSpecified(CoreInstance property,  CompileContext context, Integer parametersCount)
-    {
-        boolean result = false;
-        if (isGeneratedQualifiedProperty(property, context))
-        {
-            return parametersCount == getCountOfParametersSatisfyingMilestoningDateRequirments((QualifiedProperty)property, context);
-        }
-        return result;
-    }
-
-    public static MilestoningDates getMilestoningDatesForValidMilestoningDataSourceTypes(CoreInstance fe, CompileContext context, Integer parametersCount)
-    {
-       /* for (MilestoningDateSourceType dateSourceType : MilestoningDateSourceType.values())
-        {
-            if (dateSourceType.isDataSourceType(fe, repository, processorSupport))
-            {
-                return dateSourceType.getMilestonedDates(fe, state, repository, context, processorSupport);
-            }
-        }*/
-        if (fe instanceof FunctionExpression) {
-            System.out.println(fe.getName());
-        }
-        if (fe instanceof org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.valuespecification.VariableExpression) {
-            String lambdaInputAlias = fe instanceof org.finos.legend.pure.m3.coreinstance.meta.pure.metamodel.valuespecification.VariableExpression ? ((VariableExpression)fe)._name() : null;
-            //return state.getMilestoningDates(lambdaInputAlias);
-        }
-        return null;
-    }
-
     private static void updateFunctionExpressionWithMilestoningDateParams(FunctionExpression functionExpression, CoreInstance propertyFunc, SourceInformation sourceInformation)
     {
         applyPropertyFunctionExpressionMilestonedDates(functionExpression, propertyFunc, sourceInformation);
@@ -833,59 +776,14 @@ public class Milestoning
         }
     };
 
-    private static ListMultimap<Integer, QualifiedProperty> getMilestonedQualifiedPropertiesRelatedByNameWithParamCount(PropertyOwner owner, String qualifiedPropertyName, CompileContext context)
-    {
-        PropertyOwnerStrategy propertyOwnerStrategy = PropertyOwnerStrategy.PROPERTY_OWNER_STRATEGY_FUNCTION.valueOf(owner);
-        ListIterable<QualifiedProperty> allQualifiedProperties = LazyIterate.concatenate((Iterable<QualifiedProperty>)propertyOwnerStrategy.qualifiedProperties(owner), (Iterable<QualifiedProperty>)propertyOwnerStrategy.qualifiedPropertiesFromAssociations(owner)).toList();
-        ListIterable<QualifiedProperty> milestonedQpsWithSameName = allQualifiedProperties.select(Predicates.attributeEqual(TO_FUNCTION_NAME, qualifiedPropertyName));
-        return milestonedQpsWithSameName.groupBy(new Function<QualifiedProperty, Integer>()
-        {
-            @Override
-            public Integer valueOf(QualifiedProperty qualifiedProperty)
-            {
-          //      FunctionType functionType = (FunctionType)qualifiedProperty;
-//                RichIterable<? extends VariableExpression> functionTypeParams = functionType._parameters();
-//                return ListHelper.tail(functionTypeParams).size();
-                return 1;
-            }
-        });
-    }
-
-    public static CoreInstance getMatchingMilestoningQualifiedPropertyWithDateArg(CoreInstance property, CompileContext context)
-    {
-        String propertyName = property.getName();
-        CoreInstance propertyReturnType = property instanceof AbstractProperty ? ((AbstractProperty<?>) property)._owner() : null;
-        Class returnType = (Class) propertyReturnType;
-        MilestoningStereotype milestoningStereotype = Milestoning.temporalStereotypes(returnType._stereotypes()).get(0);
-        ListIterable<String> temporalPropertyNames;
-        if(milestoningStereotype.getPurePlatformStereotypeName() == "processingtemporal")
-        {
-            temporalPropertyNames = FastList.newListWith("processingDate");
-        }
-        else if(milestoningStereotype.getPurePlatformStereotypeName() == "businesstemporal")
-        {
-            temporalPropertyNames = FastList.newListWith("businessDate");
-        }
-        else
-        {
-            temporalPropertyNames = FastList.newListWith("processingDate", "businessDate");
-        }
-        PropertyOwner owner = property instanceof AbstractProperty ? ((AbstractProperty)property)._owner() : null;
-        ListMultimap<Integer, QualifiedProperty> relatedQpsByNameAndParamCount = getMilestonedQualifiedPropertiesRelatedByNameWithParamCount(owner, propertyName, context);
-       // return relatedQpsByNameAndParamCount.get(temporalPropertyNames.size()).getFirst();
-        return null;
-    }
-
     public static CoreInstance getMilestoningQualifiedPropertyWithAllDatesSupplied(FunctionExpression functionExpression, CoreInstance propertyFunc, CompileContext context, Integer parametersCount, SourceInformation sourceInformation)
     {
         ListIterable<? extends ValueSpecification> parametersValues = functionExpression._parametersValues().toList();
         ValueSpecification source = parametersValues.get(0);
-       // MilestoningDates propagatedDates = getMilestoningDatesForValidMilestoningDataSourceTypes(source, context, parametersCount);
-        if (processingDate != null || businessDate != null)
-        {
+//        if (processingDate != null || businessDate != null)
+//        {
             updateFunctionExpressionWithMilestoningDateParams(functionExpression, propertyFunc, sourceInformation);
-            //propertyFunc = getMatchingMilestoningQualifiedPropertyWithDateArg(propertyFunc, context);
-        }
+//        }
         return functionExpression._func();
     }
 
