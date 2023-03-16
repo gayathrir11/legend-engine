@@ -32,6 +32,7 @@ public class Query
     public String content;
     // We make it clear that we only allow a single owner
     public String owner;
+    public Long lastUpdateTimeStamp;
 
     public List<TaggedValue> taggedValues;
     public List<StereotypePtr> stereotypes;

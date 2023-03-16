@@ -37,7 +37,9 @@ import org.finos.legend.engine.shared.core.vault.Vault;
 import javax.lang.model.SourceVersion;
 import javax.ws.rs.core.Response;
 import java.time.Instant;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.regex.Pattern;
 
@@ -98,6 +100,7 @@ public class QueryStoreManager
         query.runtime = document.getString("runtime");
         query.content = document.getString("content");
         query.owner = document.getString("owner");
+        query.lastUpdateTimeStamp = document.getLong("lastUpdateTimeStamp");
         if (document.get("taggedValues") != null)
         {
             query.taggedValues = ListIterate.collect(document.getList("taggedValues", Document.class), _doc ->
@@ -232,7 +235,7 @@ public class QueryStoreManager
         return LazyIterate.collect(this.getQueryCollection()
                 .find(filters.isEmpty() ? EMPTY_FILTER : Filters.and(filters))
                 // NOTE: return a light version of the query to save bandwidth
-                .projection(Projections.include("id", "name", "versionId", "groupId", "artifactId", "owner"))
+                .projection(Projections.include("id", "name", "versionId", "groupId", "artifactId", "owner", "lastUpdateTimeStamp"))
                 .limit(Math.min(MAX_NUMBER_OF_QUERIES, searchSpecification.limit == null ? Integer.MAX_VALUE : searchSpecification.limit)), QueryStoreManager::documentToQuery).toList();
     }
 
@@ -262,8 +265,11 @@ public class QueryStoreManager
         {
             throw new ApplicationQueryException("Query with ID '" + query.id + "' already existed", Response.Status.BAD_REQUEST);
         }
+        query.lastUpdateTimeStamp = Instant.now().toEpochMilli();
         this.getQueryCollection().insertOne(queryToDocument(query));
-        this.getQueryEventCollection().insertOne(queryEventToDocument(createEvent(query.id, QueryEvent.QueryEventType.CREATED)));
+        QueryEvent createdEvent = createEvent(query.id, QueryEvent.QueryEventType.CREATED);
+        createdEvent.timestamp = query.lastUpdateTimeStamp;
+        this.getQueryEventCollection().insertOne(queryEventToDocument(createdEvent));
         return query;
     }
 
@@ -293,8 +299,11 @@ public class QueryStoreManager
             throw new ApplicationQueryException("Only owner can update the query", Response.Status.FORBIDDEN);
         }
         query.owner = currentUser;
+        query.lastUpdateTimeStamp = Instant.now().toEpochMilli();
         this.getQueryCollection().findOneAndReplace(Filters.eq("id", queryId), queryToDocument(query));
-        this.getQueryEventCollection().insertOne(queryEventToDocument(createEvent(query.id, QueryEvent.QueryEventType.UPDATED)));
+        QueryEvent updatedEvent = createEvent(query.id, QueryEvent.QueryEventType.UPDATED);
+        updatedEvent.timestamp = query.lastUpdateTimeStamp;
+        this.getQueryEventCollection().insertOne(queryEventToDocument(updatedEvent));
         return query;
     }
 
