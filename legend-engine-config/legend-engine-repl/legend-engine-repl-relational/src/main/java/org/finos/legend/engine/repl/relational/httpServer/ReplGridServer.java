@@ -61,7 +61,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.UUID;
 
 public class ReplGridServer
 {
@@ -70,6 +72,7 @@ public class ReplGridServer
     private PureModelContextData currentPMCD;
     private Client client;
     private int port;
+    private Map<String, String> savedQueries = new HashMap<>();
 
     public ReplGridServer(Client client)
     {
@@ -273,6 +276,53 @@ public class ReplGridServer
                         String requestBody = bufferReader.lines().collect(Collectors.joining("\n"));
                         PureGrammarParser.newInstance().parseValueSpecification(requestBody, "", 0, 0, true);
                         exchange.sendResponseHeaders(200, -1);
+                    }
+                    catch (Exception e)
+                    {
+                        handleResponse(exchange, 400, objectMapper.writeValueAsString(new ExceptionError(-1, e)));
+                    }
+                }
+            }
+        });
+
+        server.createContext("/query/", new HttpHandler()
+        {
+            @Override
+            public void handle(HttpExchange exchange) throws IOException
+            {
+                handleCORS(exchange);
+                if ("GET".equals(exchange.getRequestMethod()))
+                {
+                    try
+                    {
+                        String[] queryPath = exchange.getRequestURI().getPath().split("/query/");
+                        String savedQuery = savedQueries.get(path[1]);
+                        handleResponse(exchange, 200, savedQuery);
+                    }
+                    catch (Exception e)
+                    {
+                        handleResponse(exchange, 400, objectMapper.writeValueAsString(new ExceptionError(-1, e)));
+                    }
+                }
+            }
+        });
+
+        server.createContext("/saveQuery", new HttpHandler()
+        {
+            @Override
+            public void handle(HttpExchange exchange) throws IOException
+            {
+                handleCORS(exchange);
+                if ("POST".equals(exchange.getRequestMethod()))
+                {
+                    try
+                    {
+                        InputStreamReader inputStreamReader = new InputStreamReader(exchange.getRequestBody(), StandardCharsets.UTF_8);
+                        BufferedReader bufferReader = new BufferedReader(inputStreamReader);
+                        String requestBody = bufferReader.lines().collect(Collectors.joining("\n"));
+                        String queryId = UUID.randomUUID().toString();
+                        savedQueries.put(queryId, requestBody);
+                        handleResponse(exchange, 200, objectMapper.writeValueAsString(queryId));
                     }
                     catch (Exception e)
                     {
